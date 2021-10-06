@@ -114,6 +114,25 @@ ORDER BY fechaMov DESC;
 /* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */
 
 
+/* /////////////////////////////// VISTA DE TODAS LAS VENTAS REGISTRADAS  /////////////////////////////////////////*/
+
+
+CREATE OR REPLACE VIEW ventasView AS
+SELECT movimientos_financieros.id, muebles.NombreMueble AS "Mueble", DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha', 
+movimientos_financieros.cantidad, ventas.descripcion AS Descripcion
+FROM ventas
+INNER JOIN movimientos_financieros ON movimientos_financieros.id = ventas.id
+INNER JOIN muebles ON muebles.idMuebles = ventas.idMuebles2
+ORDER BY fechaMov DESC;
+
+SELECT * FROM ventasView;
+
+/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */
+/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */
+
+
+
+
 
 /*------------------------------------------------------------------------------------------------------------------------*/
 /*\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ INICIAN TODO LOS PROCEDIMIENTOS ////////////////////////////////////////////////*/
@@ -276,7 +295,7 @@ BEGIN
     DECLARE sql_error TINYINT DEFAULT FALSE;
   
     
-    THIS_PROC: BEGIN
+    THIS_PROC: BEGIN  -- Instruccion necesaria para poder el procedimiento con un LEAVE THIS_PROC;
 	
 			SELECT id INTO aux2 FROM compras 
 			WHERE idMuebles2=idMuebles_; -- ----------------> Se busca el id de compras con el que se compro el mueble.
@@ -328,22 +347,90 @@ END//
 
 DELIMITER ;
 
-/*|||||||**********************************************************************************||||||*/
-
-   SELECT idMuebles FROM muebles -- --------------------> Con el nombre del mueble se busca si existe en la tabla y se obtine su id
-    WHERE NombreMueble = 'negra';
-
 
 CALL venta(9, 5000, '2021/04/15', 'Se pago al contado');
 
-SELECT * FROM ALMACEN;
-DELETE FROM almacen WHERE idAlmacen=3; -- ------------------> Se borra el mueble vendido del almacen.
-
-SELECT idAlmacen FROM	almacen
-WHERE idAlmacen=16;
+/* |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+/* |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
 
+/*|||||||||||||||||||||||||||||************* PROCEDIMIENTO UPDATE  VENTA ******************||||||||||||||||||||||||||||||||*/
 
+DROP PROCEDURE IF EXISTS updateVenta; -- SE DEBE LLAMAR  DESDE EL PROGRAMA PRINCIPAL O APLICACION.
+DELIMITER //
+CREATE PROCEDURE updateVenta(IN iden INT, fechaNew DATETIME, cantNew DECIMAL(8,2), descNew VARCHAR(100))
+BEGIN
+-- iden ------> Es el id del movimiento financiero en el que se va hacer la modificacion.
+-- fechaNew --> Es la fecha que se va actualizar.
+-- cantNew ---> Es la cantidad que se va actualizar.
+-- descNew ---> Es la descripcion que el usuario manda.
+	    
+	DECLARE saldoTotal DECIMAL (8,2) DEFAULT 0.0; -- Guarda el capital con el que se cuenta actualmente, en el id mas grande.
+    DECLARE saldoLocal DECIMAL (8,2) DEFAULT 0.0; -- Guarda el capital relacionado con el id que se va a modificar.
+	DECLARE diferencia DECIMAL (8,2) DEFAULT 0.0; -- Guarda lo que se tiene que agregar o restar de capital actual.
+	DECLARE capActual  DECIMAL (8,2) DEFAULT 0.0; -- Guarda el capital actual 
+	DECLARE capLocal   DECIMAL (8,2) DEFAULT 0.0; -- Guarda el capital actual 
+	DECLARE cantAux    DECIMAL (8,2) DEFAULT 0.0; -- Guarda la cantidad que esta en la base de datos. 
+    DECLARE aux 	   INT DEFAULT 0;
+    DECLARE sql_error  TINYINT DEFAULT FALSE;
+      
+   -- codigo para obtener el capital actual y el capital relacioando a la id de modificacion . ------- 
+
+    SELECT capital INTO capActual FROM movimientos_financieros
+    WHERE id=(SELECT MAX(id) FROM movimientos_financieros);	-- Se obtiene el capital restante hasta el momento.
+    
+    SELECT capital INTO capLocal FROM movimientos_financieros
+    WHERE id=iden;
+    
+  -- -------------------------------------------------------- --  
+    SELECT cantidad INTO cantAux FROM movimientos_financieros
+    WHERE id=iden;
+    
+    
+    IF (cantNew >= cantAux) 
+		THEN 
+        --  Si la cantidad que ingresa es mayor o igual a la cantidad que arroja la subconsulta se realiza una suma al capital
+	  
+        SET diferencia = cantNew   - cantAux;
+        SET saldoTotal = capActual + diferencia;
+        SET saldoLocal = capLocal  + diferencia;
+   
+   ELSE
+		
+        SET diferencia = cantAux   - cantNew;
+        SET saldoTotal = capActual - diferencia;
+        SET saldoLocal = capLocal  - diferencia;
+        
+    END IF;       
+        
+	START TRANSACTION;
+          
+		-- ########### Se actualiza la tabla MOVIMIENTOS_FINANCIEROS #########
+		
+        SELECT MAX(id) INTO aux FROM movimientos_financieros; -- Se obtiene el id de la ultima transaccion.
+		
+        UPDATE bdnegociomuebles.movimientos_financieros SET fechaMov = fechaNew, cantidad = cantNew, capital=saldoLocal WHERE (id=iden); 
+        UPDATE bdnegociomuebles.movimientos_financieros SET capital = saldoTotal  WHERE (id=aux);
+        
+        -- ###########-- Se actualiza la tabla VENTAS ----------###########
+       
+       UPDATE ventas SET descripcion = descNew WHERE id=iden;
+                            						
+			IF (sql_error = FALSE) THEN
+				COMMIT; -- Si no hay error ejecuta todas las transacciones
+			ELSE
+				ROLLBACK; -- Si encutra algun error en 1 de las transacciones deja las tablas en su estado original.
+                -- select 'ERROR AL INSERTAR PUTO' AS 'ERROR'; 
+                SIGNAL SQLSTATE 'HY000'
+                SET MESSAGE_TEXT = 'ERROR AL INSERTAR';
+			END IF; 
+   
+END//
+DELIMITER ;
+
+CALL updateVenta(11111, '2021/09/28 19:35:05', 1500.00, 'Se actualizo desde Workbench');
+/* |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+/* |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
 
 /*|||||||||||||||||||||||||||||************* PROCEDIMIENTO DEPOSITO ******************||||||||||||||||||||||||||||||||*/
