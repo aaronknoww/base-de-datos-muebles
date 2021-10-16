@@ -685,12 +685,21 @@ CALL updateRetiro(10, '2021/09/28 19:35:05', 1500.00);
 
 DROP PROCEDURE IF EXISTS otroGasto;
 DELIMITER // 
-CREATE PROCEDURE otroGasto(IN nombreMue VARCHAR(30), IN cantGasto DECIMAL(8,2), IN fechaOtro DATETIME, IN descOtro VARCHAR(150) )
+CREATE PROCEDURE otroGasto(IN idmue INT, IN cantGasto DECIMAL(8,2), IN fechaOtro DATETIME, IN descOtro VARCHAR(150) )
 BEGIN
-	 DECLARE saldo DECIMAL (8,2) DEFAULT 0.0;
+
+-- idmue ------> Se recibe el id del mueble al que se le va agregar algun gasto.
+-- cantGasto --> Cantidad de dinero del gasto o reparacion.
+-- fechaOtro --> Cuando se agrego el gasto.
+-- descOtro ---> Que tipo de reparacion se hizo. 
+
+	 DECLARE saldo DECIMAL (8,2) DEFAULT 0.0; -- Saldo con el que se cuenta en el momento de la operacion.
+     DECLARE total DECIMAL (8.2) DEFAULT 0.0; -- Para guardar la suma del costo final mas el gasto.
      DECLARE aux, aux2, aux3 INT DEFAULT 0;
+     DECLARE alm INT DEFAULT 0; -- Guarda el id del almacen que es igual al de compras.
      DECLARE sql_error TINYINT DEFAULT FALSE;
-	 DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET sql_error = TRUE;
+	 
+     -- DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET sql_error = TRUE;
      
      
      SELECT MAX(id) INTO aux FROM movimientos_financieros; --  ----> Se obtiene el ultimo dato de captial de la tabla.
@@ -699,44 +708,36 @@ BEGIN
      
      IF(saldo >= cantGasto ) THEN -- ------>Entra si existen los fondos suficientes para realizar la operacion.
 		
-        SET aux = 0;
-        SELECT idMuebles INTO aux FROM muebles
-        WHERE NombreMueble = nombreMue; --    ---------> Se obtiene el id del mueble que se esta buscando.
-        
-        SELECT id INTO aux2 FROM compras -- -----------> Con el id del mueble se busca el id de la compra.
-        WHERE idMuebles2 = aux;
+		SELECT id INTO alm FROM compras
+		WHERE idMuebles2 = idmue;
         
         SELECT idAlmacen INTO aux3 FROM almacen -- -----------> Con el id de la compra se revisa si todavia esta ese mueble en el almacen.
-        WHERE idAlmacen= aux2;
-        
-      
-        
+        WHERE idAlmacen= alm;
+               
         IF(aux3 > 0) THEN -- --------------> Entra si todavia esta el mueble en el almacen.
 			 
              
             START TRANSACTION;
 				
-				SELECT capital INTO saldo FROM movimientos_financieros
-				ORDER BY id DESC LIMIT 1; -- --------------------------> Se obtiene el ultimo capital que se inserto en la tabla.
-				
-                SET saldo = saldo - cantGasto;
+			    SET saldo = saldo - cantGasto;
 		       
                 INSERT INTO movimientos_financieros(id, codigoTipo, fechaMov, cantidad, capital)
-				VALUES(0, 5, fechaOtro, cantGasto, saldo); -- -------------------> Se registra el movimiento financiero (otro gasto). 
+				VALUES(0, 5, fechaOtro, cantGasto, saldo); -- -----> Se registra el movimiento financiero (otro gasto). 
 				
-                SELECT costoFinal INTO saldo FROM almacen
-                WHERE idAlmacen = aux3;
+                              
+                SELECT costoFinal INTO total FROM almacen
+                WHERE idAlmacen = alm; -- alm tiene el id de compra relacionado al mueble al que se le esta haciendo la reparacion.
                
                
-			    SET saldo = saldo + cantGasto; -- ----------> Se suma la cantidad del gasto a lo que ya tiene gasto final.
-                UPDATE almacen SET costoFinal = saldo
-                WHERE idAlmacen = aux3;
+			    SET total = total + cantGasto; -- ------> Se suma la cantidad del gasto a lo que ya tiene gasto final.
+                UPDATE almacen SET costoFinal = total
+                WHERE idAlmacen = alm;
              
                     
                 SELECT MAX(id) INTO aux2 FROM movimientos_financieros;
                 
                 INSERT INTO otros_gastos(id, idMuebles2, descripcion)
-                VALUES(aux2, aux, descOtro);
+                VALUES(aux2, idmue, descOtro);
                 
                 /*----- ******* PROBAR PARTE POR PARTE DE LA INSERCION COMENTADO PARATE DEL CODIGO----*/
                 
@@ -746,8 +747,8 @@ BEGIN
 				ELSE
 					ROLLBACK; -- Si encutra algun error en 1 de las transacciones deja las tablas en su estado original.
                     
-                    ALTER TABLE movimientos_financieros AUTO_INCREMENT = 1; -- Para borrar el auto incremento en caso de algun fallo.
-                    ALTER TABLE otros_gastos AUTO_INCREMENT = 1; -- ---------> Para borrar el auto incremento en caso de algun fallo.
+           --         ALTER TABLE movimientos_financieros AUTO_INCREMENT = 1; -- Para borrar el auto incremento en caso de algun fallo.
+           --         ALTER TABLE otros_gastos AUTO_INCREMENT = 1; -- ---------> Para borrar el auto incremento en caso de algun fallo.
 		
 					SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='ERROR AL INSERTAR';
 		            SELECT 'ERROR AL INSERTAR PUTO' AS 'ERROR', aux, aux2, aux3, saldo, cantGasto;
@@ -770,6 +771,8 @@ BEGIN
 END //
 DELIMITER ;
 
+
+CALL otroGasto(5,200.00,'2021/09/28 19:35:05','Se agrego gasto desde workbench');
 
 /*||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
