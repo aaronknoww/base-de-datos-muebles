@@ -132,6 +132,23 @@ SELECT * FROM ventasView;
 
 
 
+/* /////////////////////////////// VISTA DE TODOS LOS OTROS GASTOS REGISTRADAS  /////////////////////////////////////////*/
+
+CREATE OR REPLACE VIEW otrosGastosView AS
+SELECT  movimientos_financieros.id, muebles.idMuebles, muebles.NombreMueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha',
+			movimientos_financieros.cantidad, otros_gastos.descripcion
+FROM otros_gastos
+INNER JOIN muebles ON muebles.idMuebles = otros_gastos.idMuebles2
+INNER JOIN movimientos_financieros ON movimientos_financieros.id = otros_gastos.id
+ORDER BY movimientos_financieros.fechaMov DESC;
+
+
+select * from otrosGastosView;
+/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */
+/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */
+
+
+
 
 
 /*------------------------------------------------------------------------------------------------------------------------*/
@@ -775,6 +792,10 @@ DELIMITER ;
 CALL otroGasto(5,200.00,'2021/09/28 19:35:05','Se agrego gasto desde workbench');
 
 /*||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+/*||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+
+
+
 
 
 /*|||||||||||||||||||||||||||||************* PROCEDIMIENTO CAPITAL ACTUAL ******************||||||||||||||||||||||||||||||||*/
@@ -797,26 +818,7 @@ CALL capitalActual();
 SELECT @cap;
 /*||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
-/*|||||||||||||||||||||||||||||************* PROCEDIMIENTO ULTIMO ID ACTUAL ******************||||||||||||||||||||||||||||||||*/
 
-
-
-
-
-
-
-
-
-CALL otroGasto('no existe ',100, NULL, NULL);
-CALL otroGasto('Sala Cafe', 50, '2021/04/28', 'Se reparo la tela');
-SELECT * FROM inventarioView;
-SELECT * FROM muebles;
-
-
-
-
-INSERT INTO otros_gastos(id, idMuebles2, decripcion)
-VALUES(14,2,'probando esta madre');
 
 SELECT * FROM MUEBLES;
 SELECT * FROM movimientos_financieros;
