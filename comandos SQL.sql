@@ -135,7 +135,7 @@ SELECT * FROM ventasView;
 /* /////////////////////////////// VISTA DE TODOS LOS OTROS GASTOS REGISTRADAS  /////////////////////////////////////////*/
 
 CREATE OR REPLACE VIEW otrosGastosView AS
-SELECT  movimientos_financieros.id, muebles.idMuebles, muebles.NombreMueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha',
+SELECT  movimientos_financieros.id as 'idMovimiento', muebles.NombreMueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha',
 			movimientos_financieros.cantidad, otros_gastos.descripcion
 FROM otros_gastos
 INNER JOIN muebles ON muebles.idMuebles = otros_gastos.idMuebles2
@@ -638,7 +638,7 @@ BEGIN
    
    THIS_PROC: BEGIN
    
-		IF(cantNew < 1 || cantNew > capActual || cantNew > capLocal)
+		IF(cantNew < 1 OR cantNew > capActual OR cantNew > capLocal)
 			THEN
 				-- Entra por que lo que se quiere retirar es una cantidad que existe en la cuenta.
                 SIGNAL SQLSTATE 'HY000'
@@ -795,6 +795,103 @@ CALL otroGasto(5,200.00,'2021/09/28 19:35:05','Se agrego gasto desde workbench')
 /*||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
 
+
+
+/*||||||||||||||||||||||||||||||************* PROCEDIMIENTO UPDATE OTRO GASTO  ******************|||||||||||||||||||||||||||||||||*/
+
+DROP PROCEDURE IF EXISTS updateGasto;
+DELIMITER // 
+CREATE PROCEDURE updateGasto(IN idmov INT, IN cantNew DECIMAL(8,2), IN fechaNew DATETIME, IN newDesc VARCHAR(150) )
+BEGIN
+
+-- idmov ------> Se recibe el id del movimiento financiero relacionado con la actualizacion o correccion.
+-- idmue ------> Se recibe el id del mueble al que se le va agregar algun gasto.
+-- cantGasto --> Cantidad de dinero del gasto o reparacion.
+-- fechaOtro --> Cuando se agrego el gasto.
+-- descOtro ---> Que tipo de reparacion se hizo. 
+
+	 DECLARE saldoTotal 	DECIMAL (8,2) DEFAULT 0.0; -- Saldo con el que se cuenta en el momento de la operacion.
+     DECLARE saldoLocal 	DECIMAL (8.2) DEFAULT 0.0; -- Saldo que registrado en el id del movimiento financiero.
+     DECLARE cantAux 		DECIMAL (8,2) DEFAULT 0.0; -- Es la cantidad guardada en movimiento financiero y que va a ser modificada.
+     DECLARE diferencia 	DECIMAL (8,2) DEFAULT 0.0;
+     DECLARE aux, aux2, aux3 INT DEFAULT 0;
+     DECLARE sql_error TINYINT DEFAULT FALSE;
+	 
+     -- DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET sql_error = TRUE;
+     
+     
+     SELECT MAX(id) INTO aux FROM movimientos_financieros; --  ---------> Se obtiene el ultimo dato de captial de la tabla.
+	 SELECT capital INTO saldoTotal FROM movimientos_financieros -- ----> Se guarda el dato obtendio anteriormente.
+     WHERE id=aux;
+     
+     SELECT capital INTO saldoLocal FROM movimientos_financieros
+     WHERE id = idmov;  -- Se obtiene el capital que esta guardado en la tabla relacionado con idmovimiento financiero.
+     
+     SELECT cantidad INTO cantAux FROM movimientos_financieros
+     WHERE id = idmov;  -- Se obtiene la cantidad que esta guardada en la tabla en relacion con ese movimiento financiero.
+     
+     SET diferencia = cantNew - cantAux; -- Se obtiene la diferencia entre la cantidad guardada y la que ingresa.
+             
+     
+ THIS_PROC: BEGIN
+   
+		IF(cantNew < 1 OR diferencia > saldoTotal OR diferencia > saldoLocal )
+			THEN
+				-- Entra porque la cantidad nueva es mayor que 0
+                -- Y la diferencia es mayor al saldoTotal o a SaldoLocal.                
+                SIGNAL SQLSTATE 'HY000'
+					SET MESSAGE_TEXT = 'ERROR EN LA CANTIDAD A MODIFICAR';
+				 LEAVE THIS_PROC; -- Sale del procedimiento debido a que no hay condiciones para continuar con la ejecucion.
+		END IF;
+		   
+	  		
+	  -- -------------------------------------------------------- --  
+		
+		
+		
+		IF (cantNew >= cantAux) 
+			THEN 
+			--  Si la cantidad que ingresa es mayor o igual a la cantidad que arroja la subconsulta en relacion con el idmov, entra aqui.
+			SET diferencia = cantNew   - cantAux;
+			SET saldoTotal = saldoTotal - diferencia;
+			SET saldoLocal = saldoLocal  - diferencia;
+		 
+	   ELSE
+			SET diferencia = cantAux   - cantNew;
+			SET saldoTotal = saldoTotal + diferencia;
+			SET saldoLocal = saldoLocal  + diferencia;
+				 
+		END IF;       
+			
+		START TRANSACTION;
+			  
+			-- ########### Se actualiza la tabla MOVIMIENTOS_FINANCIEROS #########
+			
+			SELECT MAX(id) INTO aux FROM movimientos_financieros; -- Se obtiene el id de la ultima transaccion.
+			
+			UPDATE bdnegociomuebles.movimientos_financieros SET fechaMov = fechaNew, cantidad = cantNew, capital=saldoLocal WHERE (id=idmov); 
+			UPDATE bdnegociomuebles.movimientos_financieros SET capital = saldoTotal  WHERE (id=aux); -- Se modifica el capital total de la base de datos.
+						
+            UPDATE bdnegociomuebles.otros_gastos SET otros_gastos.descripcion =  newDesc WHERE (otros_gastos.id= idmov);           
+                        
+				IF (sql_error = FALSE) THEN
+					COMMIT; -- Si no hay error ejecuta todas las transacciones
+				ELSE
+					ROLLBACK; -- Si encutra algun error en 1 de las transacciones deja las tablas en su estado original.
+					-- select 'ERROR AL INSERTAR PUTO' AS 'ERROR'; 
+					SIGNAL SQLSTATE 'HY000'
+					SET MESSAGE_TEXT = 'ERROR AL INSERTAR';
+				END IF; 
+   END; -- Fin del procedimiento.
+    
+END //
+DELIMITER ;
+
+
+CALL updateGasto(28,150.00,'2021/09/28 19:35:05','Se  quito id mueble');
+
+/*||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+/*||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
 
 
