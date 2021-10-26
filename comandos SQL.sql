@@ -135,7 +135,7 @@ SELECT * FROM ventasView;
 /* /////////////////////////////// VISTA DE TODOS LOS OTROS GASTOS REGISTRADAS  /////////////////////////////////////////*/
 
 CREATE OR REPLACE VIEW otrosGastosView AS
-SELECT  movimientos_financieros.id as 'idMovimiento', muebles.NombreMueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha',
+SELECT  movimientos_financieros.id as 'idMovimiento', muebles.idMuebles, muebles.NombreMueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha',
 			movimientos_financieros.cantidad, otros_gastos.descripcion
 FROM otros_gastos
 INNER JOIN muebles ON muebles.idMuebles = otros_gastos.idMuebles2
