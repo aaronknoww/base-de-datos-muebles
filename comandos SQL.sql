@@ -894,6 +894,46 @@ CALL updateGasto(28,150.00,'2021/09/28 19:35:05','Se  quito id mueble');
 /*||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
 
+/*||||||||||||||||||||||||||||||************* PROCEDIMIENTO UPDATE MUEBLES  ******************|||||||||||||||||||||||||||||||||*/
+
+DROP PROCEDURE IF EXISTS updateMueble;
+DELIMITER // 
+CREATE PROCEDURE updateMueble(IN idMue INT, IN nombreMue VARCHAR(30), IN desMueble VARCHAR(60) )
+BEGIN
+
+-- Solo modifica los muebles que se encuentran en el almacen.
+
+     DECLARE aux, aux2, aux3 INT DEFAULT 0;
+     DECLARE idAlm INT DEFAULT 0;
+     DECLARE sql_error TINYINT DEFAULT FALSE;
+	 
+     SELECT id INTO aux FROM compras WHERE idmue=idMuebles2; -- Para saber cual id le tocaria en el almacen al mueble que se quiere modificar
+             
+     SELECT idAlmacen INTO idAlm FROM almacen WHERE idAlmacen=aux;-- Para saber si todavia existe ese mueble en el almacen.
+     
+    
+     
+     
+     IF(idAlm>0) THEN
+		UPDATE muebles SET NombreMueble = nombreMue, descripcion=desMueble
+        WHERE idMuebles = idMue;
+     ELSE          
+    	SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='EL MUEBLE YA NO EXISTE';
+	
+     END IF;      
+     
+    
+END //
+DELIMITER ;
+
+CALL updateMueble(12,'workbench', 'se modifico desde workbench');
+
+
+
+/*||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+/*||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+
+
 
 /*|||||||||||||||||||||||||||||************* PROCEDIMIENTO CAPITAL ACTUAL ******************||||||||||||||||||||||||||||||||*/
 
