@@ -954,6 +954,30 @@ DELIMITER ;
 CALL capitalActual();
 SELECT @cap;
 /*||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+/*||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+
+/*||||||||||||||||||||||||||||||************* PROCEDIMIENTO INVERSION  ******************|||||||||||||||||||||||||||||||||*/
+
+DROP PROCEDURE IF EXISTS inversion;
+DELIMITER // 
+CREATE PROCEDURE inversion(IN periodo INT, fechaIncial DATETIME, fechaFinal DATETIME )
+BEGIN
+
+-- periodo -----> Ingresan un numero entre 1 y 3 para indicar si la consulta es por semana, mes o año.
+-- fechaIncial--> Fecha en la que inicia la consulta no puede ser menor a 2021.ALTER
+-- fechaFinal --> Fecha en la que termina la consulta, no puede ser mayor a la fecha actual.
+	 
+     DECLARE saldo DECIMAL (8,2) DEFAULT 0.00;
+     DECLARE aux INT DEFAULT 0;
+     
+    SELECT * FROM bdnegociomuebles.movimientos_financieros
+    WHERE movimientos_financieros.codigoTipo=1;
+    
+END //
+DELIMITER ;
+
+/*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+/*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
 
 
