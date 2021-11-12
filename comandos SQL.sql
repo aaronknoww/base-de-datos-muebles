@@ -960,22 +960,78 @@ SELECT @cap;
 
 DROP PROCEDURE IF EXISTS inversion;
 DELIMITER // 
-CREATE PROCEDURE inversion(IN periodo INT, fechaIncial DATETIME, fechaFinal DATETIME )
+CREATE PROCEDURE inversion(IN periodo INT, fechaInicial DATETIME, fechaFinal DATETIME )
 BEGIN
 
--- periodo -----> Ingresan un numero entre 1 y 3 para indicar si la consulta es por semana, mes o año.
+-- periodo -----> Ingresan un numero entre 1 y 3 para indicar si la consulta es por 1.- semana, 2.- mes o 3.- año .
 -- fechaIncial--> Fecha en la que inicia la consulta no puede ser menor a 2021.ALTER
 -- fechaFinal --> Fecha en la que termina la consulta, no puede ser mayor a la fecha actual.
-	 
-     DECLARE saldo DECIMAL (8,2) DEFAULT 0.00;
-     DECLARE aux INT DEFAULT 0;
+	 DECLARE aux, aux2, aux3 INT DEFAULT 0;
+     DECLARE idAlm INT DEFAULT 0;
+     DECLARE sql_error TINYINT DEFAULT FALSE;
      
-    SELECT * FROM bdnegociomuebles.movimientos_financieros
-    WHERE movimientos_financieros.codigoTipo=1;
+     THIS_PROC: BEGIN
+     
+     
+		IF( ( (SELECT NOW() )<fechaInicial ) OR ( ( SELECT NOW() < fechaFinal) ) OR ( ( fechaInicial > fechaFinal) ) ) 
+			THEN 
+            
+            -- Si encuentra algun erro en las fechas se sale de la consulta y genera un error.
+            
+            SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='FECHA DE CONSULTA, INCORRECTA';
+            LEAVE THIS_PROC;
+        END IF;
+    
+    
+    
+		IF(periodo=1) THEN
+        
+		-- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR SEMANA.
+			
+            SELECT movimientos_financieros.fechaMov as 'Fecha de deposito', week(fechaMov) as Semana, SUM(cantidad) as 'cantidad por semana' 
+			FROM bdnegociomuebles.movimientos_financieros
+			WHERE (movimientos_financieros.codigoTipo=1)
+			AND (movimientos_financieros.fechaMov>=fechaInicial)
+			AND (movimientos_financieros.fechaMov<=fechaFinal)
+			GROUP BY Semana, fechaMov
+			WITH ROLLUP;
+            
+		ELSEIF(periodo=2) THEN
+        
+        -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR MES.
+        
+			SELECT movimientos_financieros.fechaMov as 'Fecha de deposito', month(fechaMov) as Mes, SUM(cantidad) as 'cantidad por semana' 
+			FROM bdnegociomuebles.movimientos_financieros
+			WHERE (movimientos_financieros.codigoTipo=1)
+			AND (movimientos_financieros.fechaMov>=fechaInicial)
+			AND (movimientos_financieros.fechaMov<=fechaFinal)
+			GROUP BY Mes, fechaMov
+			WITH ROLLUP;
+        			
+        ELSEIF(periodo=3) THEN
+        
+        -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR AÑO.
+        
+			SELECT movimientos_financieros.fechaMov as 'Fecha de deposito', year(fechaMov) as Anio, SUM(cantidad) as 'cantidad por semana' 
+			FROM bdnegociomuebles.movimientos_financieros
+			WHERE (movimientos_financieros.codigoTipo=1)
+			AND (movimientos_financieros.fechaMov>=fechaInicial)
+			AND (movimientos_financieros.fechaMov<=fechaFinal)
+			GROUP BY Anio, fechaMov
+			WITH ROLLUP;
+            
+		ELSE
+        
+			SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='FECHA DE CONSULTA, INCORRECTA';
+            LEAVE THIS_PROC;
+		END IF;
+     END; -- Fin del procedimiento.
+ 
     
 END //
 DELIMITER ;
 
+call inversion(3, '2021/01/01 19:35:05','2021/10/30 19:35:05');
 /*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 /*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
@@ -1032,5 +1088,8 @@ ALTER TABLE almacen MODIFY costoFinal 	   DECIMAL(8,2) NOT NULL;
 ALTER TABLE almacen MODIFY precioSugerido  DECIMAL(8,2) NOT NULL;
 ALTER TABLE otros_gastos CHANGE decripcion descripcion VARCHAR(150);
 	
+    	
+SELECT CURDATE();
+SELECT NOW();    
 
 SELECT DATE_FORMAT(fechaMov, '%d/%m/%Y') FROM movimientos_financieros; 
