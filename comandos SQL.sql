@@ -118,7 +118,7 @@ ORDER BY fechaMov DESC;
 
 
 CREATE OR REPLACE VIEW ventasView AS
-SELECT movimientos_financieros.id, muebles.NombreMueble AS "Mueble", DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha', 
+SELECT movimientos_financieros.id AS 'idMov', muebles.NombreMueble AS "Mueble", DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha', 
 movimientos_financieros.cantidad, ventas.descripcion AS Descripcion
 FROM ventas
 INNER JOIN movimientos_financieros ON movimientos_financieros.id = ventas.id
@@ -126,6 +126,22 @@ INNER JOIN muebles ON muebles.idMuebles = ventas.idMuebles2
 ORDER BY fechaMov DESC;
 
 SELECT * FROM ventasView;
+
+/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */
+/* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */
+
+/* /////////////////////////////// VISTA DE TODAS LAS VENTAS REGISTRADAS AUXILIAR PARA PROCEDIMIENTO ///////////////////*/
+
+
+CREATE OR REPLACE VIEW ventasView2 AS
+SELECT muebles.idMuebles, muebles.NombreMueble AS "Mueble", movimientos_financieros.fechaMov AS 'FechaVenta', 
+movimientos_financieros.cantidad AS 'PrecioDeVenta'
+FROM ventas
+INNER JOIN movimientos_financieros ON movimientos_financieros.id = ventas.id
+INNER JOIN muebles ON muebles.idMuebles = ventas.idMuebles2
+ORDER BY fechaMov DESC;
+
+SELECT * FROM ventasView2;
 
 /* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */
 /* ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| */
@@ -365,7 +381,7 @@ END//
 DELIMITER ;
 
 
-CALL venta(9, 5000, '2021/04/15', 'Se pago al contado');
+CALL venta(8, 7000, '2021/11/20', 'Se pago al contado');
 
 /* |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 /* |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
@@ -958,6 +974,8 @@ SELECT @cap;
 
 /*||||||||||||||||||||||||||||||************* PROCEDIMIENTO INVERSION  ******************|||||||||||||||||||||||||||||||||*/
 
+-- Muestra toda lo que se ha invertido en un determinado tiempo y se muestra por semana, mes o a;o, segun el usuario elija.
+
 DROP PROCEDURE IF EXISTS inversion;
 DELIMITER // 
 CREATE PROCEDURE inversion(IN periodo INT, fechaInicial DATETIME, fechaFinal DATETIME )
@@ -1031,7 +1049,7 @@ BEGIN
 END //
 DELIMITER ;
 
-call inversion(3, '2021/01/01 19:35:05','2021/10/30 19:35:05');
+call inversion(1, '2021/01/01 19:35:05','2021/10/30 19:35:05');
 /*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 /*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
@@ -1075,38 +1093,131 @@ BEGIN
 		IF(periodo=1) THEN
         
 		-- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR SEMANA.
+		
+			with otroGasto as -- CTE que muestra todos los gastos que se le han agragado a cada mueble, ademas de agruparlos.
+			(select  otros_gastos.id, otros_gastos.idMuebles2, movimientos_financieros.cantidad,  sum(cantidad) as gastoTot
+			 from otros_gastos
+			 inner join movimientos_financieros on otros_gastos.id = movimientos_financieros.id
+			 group by idMuebles2
+			 ),
+			 
+			 todosMuebles as -- CTE que muestra todos muebles comprados hasta el momento.
+			 (
+			SELECT muebles.idMuebles, movimientos_financieros.id as 'idMov', muebles.NombreMueble AS 'nombreDelMueble', movimientos_financieros.cantidad AS 'precioDeCompra',
+				movimientos_financieros.fechaMov AS 'fechaDeCompra' 
+			FROM compras
+			INNER JOIN muebles ON compras.idMUebles2 = muebles.idMuebles
+			INNER JOIN movimientos_financieros ON compras.id = movimientos_financieros.id
+			),
 			
-            SELECT movimientos_financieros.fechaMov as 'Fecha de deposito', week(fechaMov) as Semana, SUM(cantidad) as 'cantidad por semana' 
-			FROM bdnegociomuebles.movimientos_financieros
-			WHERE (movimientos_financieros.codigoTipo=1)
-			AND (movimientos_financieros.fechaMov>=fechaInicial)
-			AND (movimientos_financieros.fechaMov<=fechaFinal)
-			GROUP BY Semana, fechaMov
-			WITH ROLLUP;
+			completa as -- CTE Muestra la tabla virtual resultado de unir los 2 CTE anteriores y quitar todos los valores nulos que aparecian en la consulta.
+			( select todosMuebles.idMuebles, todosMuebles.idMov, todosMuebles.nombreDelMueble, todosMuebles.precioDeCompra,IFNULL(otroGasto.gastoTot,0) as gastoTotal
+			  FROM todosMuebles
+			  left OUTER join otroGasto on otroGasto.idMuebles2=todosMuebles.idMuebles
+			  group by idMuebles
+			),
+			
+			final AS
+			( SELECT ventasview2.idMuebles, ventasview2.Mueble, ventasview2.FechaVenta, completa.precioDeCompra, completa.gastoTotal,
+				sum(completa.precioDeCompra + completa.gastoTotal) AS 'CostoTotal', ventasview2.PrecioDeVenta
+				FROM ventasview2
+				left OUTER join completa on completa.idMuebles = ventasview2.idMuebles
+				group by ventasview2.idMuebles
+			 )
+				  
+			 SELECT week(FechaVenta) as 'Semana', final.precioDeCompra AS 'CostoDeCompra', final.gastoTotal AS 'GastoExtra', final.CostoTotal, final.PrecioDeVenta,
+				sum(PrecioDeVenta-CostoTotal)  AS Ganancia  FROM final
+				WHERE (final.FechaVenta>=fechaInicial) AND (final.FechaVenta<=fechaFinal)
+			 group by Semana
+             order by Semana;
+				
+				 
+     
             
 		ELSEIF(periodo=2) THEN
         
         -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR MES.
         
-			SELECT movimientos_financieros.fechaMov as 'Fecha de deposito', month(fechaMov) as Mes, SUM(cantidad) as 'cantidad por semana' 
-			FROM bdnegociomuebles.movimientos_financieros
-			WHERE (movimientos_financieros.codigoTipo=1)
-			AND (movimientos_financieros.fechaMov>=fechaInicial)
-			AND (movimientos_financieros.fechaMov<=fechaFinal)
-			GROUP BY Mes, fechaMov
-			WITH ROLLUP;
-        			
+			
+			with otroGasto as -- CTE que muestra todos los gastos que se le han agragado a cada mueble, ademas de agruparlos.
+			(select  otros_gastos.id, otros_gastos.idMuebles2, movimientos_financieros.cantidad,  sum(cantidad) as gastoTot
+			 from otros_gastos
+			 inner join movimientos_financieros on otros_gastos.id = movimientos_financieros.id
+			 group by idMuebles2
+			 ),
+			 
+			 todosMuebles as -- CTE que muestra todos muebles comprados hasta el momento.
+			 (
+			SELECT muebles.idMuebles, movimientos_financieros.id as 'idMov', muebles.NombreMueble AS 'nombreDelMueble', movimientos_financieros.cantidad AS 'precioDeCompra',
+				movimientos_financieros.fechaMov AS 'fechaDeCompra' 
+			FROM compras
+			INNER JOIN muebles ON compras.idMUebles2 = muebles.idMuebles
+			INNER JOIN movimientos_financieros ON compras.id = movimientos_financieros.id
+			),
+			
+			completa as -- CTE Muestra la tabla virtual resultado de unir los 2 CTE anteriores y quitar todos los valores nulos que aparecian en la consulta.
+			( select todosMuebles.idMuebles, todosMuebles.idMov, todosMuebles.nombreDelMueble, todosMuebles.precioDeCompra,IFNULL(otroGasto.gastoTot,0) as gastoTotal
+			  FROM todosMuebles
+			  left OUTER join otroGasto on otroGasto.idMuebles2=todosMuebles.idMuebles
+			  group by idMuebles
+			),
+			
+			final AS
+			( SELECT ventasview2.idMuebles, ventasview2.Mueble, ventasview2.FechaVenta, completa.precioDeCompra, completa.gastoTotal,
+				sum(completa.precioDeCompra + completa.gastoTotal) AS 'CostoTotal', ventasview2.PrecioDeVenta
+				FROM ventasview2
+				left OUTER join completa on completa.idMuebles = ventasview2.idMuebles
+				group by ventasview2.idMuebles
+			 )
+				  
+			 SELECT month(FechaVenta) as 'Mes', final.precioDeCompra AS 'CostoDeCompra', final.gastoTotal AS 'GastoExtra', final.CostoTotal, final.PrecioDeVenta,
+				sum(PrecioDeVenta-CostoTotal)  AS Ganancia  FROM final
+				WHERE (final.FechaVenta>=fechaInicial) AND (final.FechaVenta<=fechaFinal)
+			 group by Mes
+             order by Mes;
+				
+					
         ELSEIF(periodo=3) THEN
         
         -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR AÑO.
         
-			SELECT movimientos_financieros.fechaMov as 'Fecha de deposito', year(fechaMov) as Anio, SUM(cantidad) as 'cantidad por semana' 
-			FROM bdnegociomuebles.movimientos_financieros
-			WHERE (movimientos_financieros.codigoTipo=1)
-			AND (movimientos_financieros.fechaMov>=fechaInicial)
-			AND (movimientos_financieros.fechaMov<=fechaFinal)
-			GROUP BY Anio, fechaMov
-			WITH ROLLUP;
+			with otroGasto as -- CTE que muestra todos los gastos que se le han agragado a cada mueble, ademas de agruparlos.
+			(select  otros_gastos.id, otros_gastos.idMuebles2, movimientos_financieros.cantidad,  sum(cantidad) as gastoTot
+			 from otros_gastos
+			 inner join movimientos_financieros on otros_gastos.id = movimientos_financieros.id
+			 group by idMuebles2
+			 ),
+			 
+			 todosMuebles as -- CTE que muestra todos muebles comprados hasta el momento.
+			 (
+			SELECT muebles.idMuebles, movimientos_financieros.id as 'idMov', muebles.NombreMueble AS 'nombreDelMueble', movimientos_financieros.cantidad AS 'precioDeCompra',
+				movimientos_financieros.fechaMov AS 'fechaDeCompra' 
+			FROM compras
+			INNER JOIN muebles ON compras.idMUebles2 = muebles.idMuebles
+			INNER JOIN movimientos_financieros ON compras.id = movimientos_financieros.id
+			),
+			
+			completa as -- CTE Muestra la tabla virtual resultado de unir los 2 CTE anteriores y quitar todos los valores nulos que aparecian en la consulta.
+			( select todosMuebles.idMuebles, todosMuebles.idMov, todosMuebles.nombreDelMueble, todosMuebles.precioDeCompra,IFNULL(otroGasto.gastoTot,0) as gastoTotal
+			  FROM todosMuebles
+			  left OUTER join otroGasto on otroGasto.idMuebles2=todosMuebles.idMuebles
+			  group by idMuebles
+			),
+			
+			final AS
+			( SELECT ventasview2.idMuebles, ventasview2.Mueble, ventasview2.FechaVenta, completa.precioDeCompra, completa.gastoTotal,
+				sum(completa.precioDeCompra + completa.gastoTotal) AS 'CostoTotal', ventasview2.PrecioDeVenta
+				FROM ventasview2
+				left OUTER join completa on completa.idMuebles = ventasview2.idMuebles
+				group by ventasview2.idMuebles
+			 )
+				  
+			 SELECT year(FechaVenta) as 'Anio', final.precioDeCompra AS 'CostoDeCompra', final.gastoTotal AS 'GastoExtra', final.CostoTotal, final.PrecioDeVenta,
+				sum(PrecioDeVenta-CostoTotal)  AS Ganancia  FROM final
+				WHERE (final.FechaVenta>=fechaInicial) AND (final.FechaVenta<=fechaFinal)
+			 group by Anio
+             order by Anio;
+			
             
 		ELSE
         
@@ -1119,34 +1230,46 @@ BEGIN
 END //
 DELIMITER ;
 
-with otroGasto as -- CTE que muestra todos los gastos que se le han agragado a cada mueble, ademas de agruparlos.
-(select  otros_gastos.id, otros_gastos.idMuebles2, movimientos_financieros.cantidad,  sum(cantidad) as gastoTot
- from otros_gastos
- inner join movimientos_financieros on otros_gastos.id = movimientos_financieros.id
- group by idMuebles2
- ),
-  todosMuebles as -- CTE que muestra todos muebles comprados hasta el momento.
- (
-SELECT muebles.idMuebles, movimientos_financieros.id as 'idMov', muebles.NombreMueble AS 'nombreDelMueble', movimientos_financieros.cantidad AS 'precioDeCompra',
-	movimientos_financieros.fechaMov AS 'fechaDeCompra' 
-FROM compras
-INNER JOIN muebles ON compras.idMUebles2 = muebles.idMuebles
-INNER JOIN movimientos_financieros ON compras.id = movimientos_financieros.id
-),
-completa as -- CTE Muestra la tabla virtual resultado de unir los 2 CTE anteriores y quitar todos los valores nulos que aparecian en la consulta.
-( select todosMuebles.idMuebles, todosMuebles.idMov, todosMuebles.nombreDelMueble, todosMuebles.precioDeCompra,IFNULL(otroGasto.gastoTot,0) as gastoTotal
-  FROM todosMuebles
-  left OUTER join otroGasto on otroGasto.idMuebles2=todosMuebles.idMuebles
-  group by idMuebles
-)
-select *, sum(precioDeCompra+gastoTotal) as 'costoTotal' from completa
-group by idMuebles;
+call ganancia(3, '2021/01/01 19:35:05','2021/11/24 19:35:05');
 
-/* (select *, IFNULL(otroGasto.gastoTot,0) as gastoTotal from todosMuebles
-left OUTER join otroGasto on otroGasto.idMuebles2=todosMuebles.idMuebles
-group by idMuebles)
-select * from completa;
+
+
+with otroGasto as -- CTE que muestra todos los gastos que se le han agragado a cada mueble, ademas de agruparlos.
+	(select  otros_gastos.id, otros_gastos.idMuebles2, movimientos_financieros.cantidad,  sum(cantidad) as gastoTot
+	 from otros_gastos
+	 inner join movimientos_financieros on otros_gastos.id = movimientos_financieros.id
+	 group by idMuebles2
+	 ),
+	 
+     todosMuebles as -- CTE que muestra todos muebles comprados hasta el momento.
+	 (
+	SELECT muebles.idMuebles, movimientos_financieros.id as 'idMov', muebles.NombreMueble AS 'nombreDelMueble', movimientos_financieros.cantidad AS 'precioDeCompra',
+		movimientos_financieros.fechaMov AS 'fechaDeCompra' 
+	FROM compras
+	INNER JOIN muebles ON compras.idMUebles2 = muebles.idMuebles
+	INNER JOIN movimientos_financieros ON compras.id = movimientos_financieros.id
+	),
+	
+    completa as -- CTE Muestra la tabla virtual resultado de unir los 2 CTE anteriores y quitar todos los valores nulos que aparecian en la consulta.
+	( select todosMuebles.idMuebles, todosMuebles.idMov, todosMuebles.nombreDelMueble, todosMuebles.precioDeCompra,IFNULL(otroGasto.gastoTot,0) as gastoTotal
+	  FROM todosMuebles
+	  left OUTER join otroGasto on otroGasto.idMuebles2=todosMuebles.idMuebles
+	  group by idMuebles
+	),
+    
+    final AS
+    ( SELECT ventasview2.idMuebles, ventasview2.Mueble, ventasview2.FechaVenta, completa.precioDeCompra, completa.gastoTotal,
+		sum(completa.precioDeCompra + completa.gastoTotal) AS 'CostoTotal', ventasview2.PrecioDeVenta
+        FROM ventasview2
+        left OUTER join completa on completa.idMuebles = ventasview2.idMuebles
+		group by ventasview2.idMuebles
+     )
+     SELECT * FROM final;
+
+/* select *, sum(precioDeCompra+gastoTotal) as 'costoTotal' from completa
+group by idMuebles;
 */
+
 
 -- inner join otroGasto on otroGasto.idMuebles2 = muebles.idMuebles
 -- GROUP BY muebles.idMuebles; 
