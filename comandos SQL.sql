@@ -1068,7 +1068,6 @@ BEGIN
 -- fechaIncial--> Fecha en la que inicia la consulta no puede ser menor a 2021.ALTER
 -- fechaFinal --> Fecha en la que termina la consulta, no puede ser mayor a la fecha actual.
 	 
-     DECLARE aux, aux2, aux3 INT DEFAULT 0;
      DECLARE idAlm INT DEFAULT 0;
      DECLARE sql_error TINYINT DEFAULT FALSE;
      DECLARE costoFinal DECIMAL (8,2) DEFAULT 0;
@@ -1234,49 +1233,183 @@ call ganancia(3, '2021/01/01 19:35:05','2021/11/24 19:35:05');
 
 
 
-with otroGasto as -- CTE que muestra todos los gastos que se le han agragado a cada mueble, ademas de agruparlos.
-	(select  otros_gastos.id, otros_gastos.idMuebles2, movimientos_financieros.cantidad,  sum(cantidad) as gastoTot
-	 from otros_gastos
-	 inner join movimientos_financieros on otros_gastos.id = movimientos_financieros.id
-	 group by idMuebles2
-	 ),
-	 
-     todosMuebles as -- CTE que muestra todos muebles comprados hasta el momento.
-	 (
-	SELECT muebles.idMuebles, movimientos_financieros.id as 'idMov', muebles.NombreMueble AS 'nombreDelMueble', movimientos_financieros.cantidad AS 'precioDeCompra',
-		movimientos_financieros.fechaMov AS 'fechaDeCompra' 
-	FROM compras
-	INNER JOIN muebles ON compras.idMUebles2 = muebles.idMuebles
-	INNER JOIN movimientos_financieros ON compras.id = movimientos_financieros.id
-	),
-	
-    completa as -- CTE Muestra la tabla virtual resultado de unir los 2 CTE anteriores y quitar todos los valores nulos que aparecian en la consulta.
-	( select todosMuebles.idMuebles, todosMuebles.idMov, todosMuebles.nombreDelMueble, todosMuebles.precioDeCompra,IFNULL(otroGasto.gastoTot,0) as gastoTotal
-	  FROM todosMuebles
-	  left OUTER join otroGasto on otroGasto.idMuebles2=todosMuebles.idMuebles
-	  group by idMuebles
-	),
+/*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+/*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+
+
+
+/*||||||||||||||||||||||||||||||************* PROCEDIMIENTO ESTADISTICA DE COMPRAS   ******************|||||||||||||||||||||||||||||||||*/
+
+-- Muestra todas las compras que se ha hecho en un determinado tiempo y se muestra por semana, mes o a;o, segun el usuario elija.
+
+DROP PROCEDURE IF EXISTS estadisticaCompras;
+DELIMITER // 
+CREATE PROCEDURE estadisticaCompras(IN periodo INT, fechaInicial DATETIME, fechaFinal DATETIME )
+BEGIN
+
+-- periodo -----> Ingresan un numero entre 1 y 3 para indicar si la consulta es por 1.- semana, 2.- mes o 3.- año .
+-- fechaIncial--> Fecha en la que inicia la consulta no puede ser menor a 2021.ALTER
+-- fechaFinal --> Fecha en la que termina la consulta, no puede ser mayor a la fecha actual.
+
+     DECLARE sql_error TINYINT DEFAULT FALSE;
+     
+     THIS_PROC: BEGIN
+     
+     
+		IF( ( (SELECT NOW() )<fechaInicial ) OR ( ( SELECT NOW() < fechaFinal) ) OR ( ( fechaInicial > fechaFinal) ) ) 
+			THEN 
+            
+            -- Si encuentra algun erro en las fechas se sale de la consulta y genera un error.
+            
+            SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='FECHA DE CONSULTA, INCORRECTA';
+            LEAVE THIS_PROC;
+        END IF;
     
-    final AS
-    ( SELECT ventasview2.idMuebles, ventasview2.Mueble, ventasview2.FechaVenta, completa.precioDeCompra, completa.gastoTotal,
-		sum(completa.precioDeCompra + completa.gastoTotal) AS 'CostoTotal', ventasview2.PrecioDeVenta
-        FROM ventasview2
-        left OUTER join completa on completa.idMuebles = ventasview2.idMuebles
-		group by ventasview2.idMuebles
-     )
-     SELECT * FROM final;
+    
+    
+		IF(periodo=1) THEN
+        
+		-- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR SEMANA.
+			
+			 SELECT muebles.NombreMueble AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeCompra', 
+				movimientos_financieros.cantidad AS 'Costo', week(fechaMov) as Semana
+				FROM compras
+				INNER JOIN movimientos_financieros ON movimientos_financieros.id = compras.id 
+				INNER JOIN muebles ON idMuebles2=idMuebles
+				WHERE (movimientos_financieros.fechaMov>=fechaInicial)
+				AND (movimientos_financieros.fechaMov<=fechaFinal)
+				ORDER BY Semana;
+		       
+		ELSEIF(periodo=2) THEN
+        
+        -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR MES.
+        
+			SET lc_time_names = 'es_ES'; -- Para poner los nombres de los meses en espa;ol
+        
+			SELECT muebles.NombreMueble AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeCompra', 
+				movimientos_financieros.cantidad AS 'Costo', monthname(fechaMov) as Mes
+				FROM compras
+				INNER JOIN movimientos_financieros ON movimientos_financieros.id = compras.id 
+				INNER JOIN muebles ON idMuebles2=idMuebles
+				WHERE (movimientos_financieros.fechaMov>=fechaInicial)
+				AND (movimientos_financieros.fechaMov<=fechaFinal)
+				ORDER BY Mes;
+        			
+        ELSEIF(periodo=3) THEN
+        
+        -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR AÑO.
+        
+			SELECT muebles.NombreMueble AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeCompra', 
+				movimientos_financieros.cantidad AS 'Costo', year(fechaMov) as Anio
+				FROM compras
+				INNER JOIN movimientos_financieros ON movimientos_financieros.id = compras.id 
+				INNER JOIN muebles ON idMuebles2=idMuebles
+				WHERE (movimientos_financieros.fechaMov>=fechaInicial)
+				AND (movimientos_financieros.fechaMov<=fechaFinal)
+				ORDER BY Anio;
+            
+		ELSE
+        
+			SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='FECHA DE CONSULTA, INCORRECTA';
+            LEAVE THIS_PROC;
+		END IF;
+     END; -- Fin del procedimiento.
+ 
+    
+END //
+DELIMITER ;
 
-/* select *, sum(precioDeCompra+gastoTotal) as 'costoTotal' from completa
-group by idMuebles;
-*/
-
-
--- inner join otroGasto on otroGasto.idMuebles2 = muebles.idMuebles
--- GROUP BY muebles.idMuebles; 
+call estadisticaCompras(1, '2021/01/01 19:35:05','2021/10/30 19:35:05');
 /*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 /*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
 
+
+
+/*||||||||||||||||||||||||||||||************* PROCEDIMIENTO ESTADISTICA DE VENTAS   ******************|||||||||||||||||||||||||||||||||*/
+
+-- Muestra todas las compras que se ha hecho en un determinado tiempo y se muestra por semana, mes o a;o, segun el usuario elija.
+
+DROP PROCEDURE IF EXISTS estadisticaVentas;
+DELIMITER // 
+CREATE PROCEDURE estadisticaVentas(IN periodo INT, fechaInicial DATETIME, fechaFinal DATETIME )
+BEGIN
+
+-- periodo -----> Ingresan un numero entre 1 y 3 para indicar si la consulta es por 1.- semana, 2.- mes o 3.- año .
+-- fechaIncial--> Fecha en la que inicia la consulta no puede ser menor a 2021.ALTER
+-- fechaFinal --> Fecha en la que termina la consulta, no puede ser mayor a la fecha actual.
+
+     DECLARE sql_error TINYINT DEFAULT FALSE;
+     
+     THIS_PROC: BEGIN
+     
+     
+		IF( ( (SELECT NOW() )<fechaInicial ) OR ( ( SELECT NOW() < fechaFinal) ) OR ( ( fechaInicial > fechaFinal) ) ) 
+			THEN 
+            
+            -- Si encuentra algun erro en las fechas se sale de la consulta y genera un error.
+            
+            SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='FECHA DE CONSULTA, INCORRECTA';
+            LEAVE THIS_PROC;
+        END IF;
+    
+    
+    
+		IF(periodo=1) THEN
+        
+		-- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR SEMANA.
+			
+			 SELECT muebles.NombreMueble AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeVenta', 
+				movimientos_financieros.cantidad AS 'Precio', week(fechaMov) as Semana
+				FROM ventas
+				INNER JOIN movimientos_financieros ON movimientos_financieros.id = ventas.id 
+				INNER JOIN muebles ON idMuebles2=idMuebles
+				WHERE (movimientos_financieros.fechaMov>=fechaInicial)
+				AND (movimientos_financieros.fechaMov<=fechaFinal)
+				ORDER BY Semana;
+		       
+		ELSEIF(periodo=2) THEN
+        
+        -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR MES.
+        
+			SET lc_time_names = 'es_ES'; -- Para poner los nombres de los meses en espa;ol
+        
+			 SELECT muebles.NombreMueble AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeVenta', 
+				movimientos_financieros.cantidad AS 'Precio', monthname(fechaMov) as Mes
+				FROM ventas
+				INNER JOIN movimientos_financieros ON movimientos_financieros.id = ventas.id 
+				INNER JOIN muebles ON idMuebles2=idMuebles
+				WHERE (movimientos_financieros.fechaMov>=fechaInicial)
+				AND (movimientos_financieros.fechaMov<=fechaFinal)
+				ORDER BY Mes;
+        			
+        ELSEIF(periodo=3) THEN
+        
+        -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR AÑO.
+        
+			SELECT muebles.NombreMueble AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeVenta', 
+				movimientos_financieros.cantidad AS 'Precio', year(fechaMov) as Anio
+				FROM ventas
+				INNER JOIN movimientos_financieros ON movimientos_financieros.id = ventas.id 
+				INNER JOIN muebles ON idMuebles2=idMuebles
+				WHERE (movimientos_financieros.fechaMov>=fechaInicial)
+				AND (movimientos_financieros.fechaMov<=fechaFinal)
+				ORDER BY Anio;
+            
+		ELSE
+        
+			SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='FECHA DE CONSULTA, INCORRECTA';
+            LEAVE THIS_PROC;
+		END IF;
+     END; -- Fin del procedimiento.
+ 
+    
+END //
+DELIMITER ;
+
+call estadisticaVentas(3, '2021/01/01 19:35:05','2021/10/30 19:35:05');
+/*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
+/*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
 SELECT * FROM MUEBLES;
 SELECT * FROM movimientos_financieros;
