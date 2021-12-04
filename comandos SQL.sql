@@ -215,7 +215,7 @@ BEGIN
 				COMMIT; -- Si no hay error ejecuta todas las transacciones
 			ELSE
 				ROLLBACK; -- Si encutra algun error en 1 de las transacciones deja las tablas en su estado original.
-                -- select 'ERROR AL INSERTAR PUTO' AS 'ERROR'; 
+
                 SIGNAL SQLSTATE 'HY000'
                 SET MESSAGE_TEXT = 'ERROR AL INSERTAR';
 			END IF; 
@@ -224,7 +224,6 @@ BEGIN
     ELSE -- Se genera un error o un mensaje.
 		SIGNAL SQLSTATE 'HY001' SET MESSAGE_TEXT = 'ERROR NO TIENES SUFICIENTES FONDOS.';
 
-        -- select 'no tienes suficientes fondos puto'as 'ERROR' ; 
     END IF;     
 		
     
@@ -299,8 +298,7 @@ BEGIN
     ELSE -- Se genera un error o un mensaje.
 	--  signal sqlstate '45000' set message_text = 'My Error Message';
 		SIGNAL SQLSTATE 'HY001' SET MESSAGE_TEXT = 'ERROR NO TIENES SUFICIENTES FONDOS.';
-
-        SELECT 'no tienes suficientes fondos puto'AS 'ERROR' ; 
+        
     END IF;     
 		
     
@@ -361,15 +359,13 @@ BEGIN
 					ROLLBACK; -- Si encutra algun error en 1 de las transacciones deja las tablas en su estado original.
 					SIGNAL SQLSTATE 'HY000'
 					SET MESSAGE_TEXT = 'ERROR AL INSERTAR.';
-					SELECT 'ERROR AL INSERTAR PUTO' AS 'ERROR', saldo, aux, aux2;
 				END IF;
                 
                 
             ELSE -- No se encuentra el mueble buscado en el almacen.
 				SIGNAL SQLSTATE 'HY000'
 				SET MESSAGE_TEXT = 'ERROR NO EXISTE EN EL ALMACEN';
-				SELECT 'error no esta en el alamcen. ' AS 'ERROR EN ALMACEN';
-                LEAVE THIS_PROC;
+		        LEAVE THIS_PROC;
 				
 	
             END IF;
@@ -453,7 +449,6 @@ BEGIN
 				COMMIT; -- Si no hay error ejecuta todas las transacciones
 			ELSE
 				ROLLBACK; -- Si encutra algun error en 1 de las transacciones deja las tablas en su estado original.
-                -- select 'ERROR AL INSERTAR PUTO' AS 'ERROR'; 
                 SIGNAL SQLSTATE 'HY000'
                 SET MESSAGE_TEXT = 'ERROR AL INSERTAR';
 			END IF; 
@@ -606,7 +601,7 @@ BEGIN
 			VALUES(0,2,fecha,cantRet ,saldo); -- ------------------------> Se registra el movimiento financiero (retiro).
 		 ELSE
 			SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='NO TIENES FONDOS SUFICIENTES';
-			SELECT 'NO TIENES SUFICIENTES FONDOS PUTO' AS 'ERROR SALDO';
+		
 		 END IF;      
      ELSE
 		SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='LA CANTIDAD A RETIRAR DEBE DE SER MAYOR A 0';
@@ -784,20 +779,20 @@ BEGIN
            --         ALTER TABLE otros_gastos AUTO_INCREMENT = 1; -- ---------> Para borrar el auto incremento en caso de algun fallo.
 		
 					SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='ERROR AL INSERTAR';
-		            SELECT 'ERROR AL INSERTAR PUTO' AS 'ERROR', aux, aux2, aux3, saldo, cantGasto;
+
                     
 				END IF;
             
             
         ELSE
 			SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='NO EXISTE ESE MUEBLE';
-			SELECT 'NO EXISTE ESE MUEBLE PUTO' AS 'ERROR EXISTENCIA',saldo, aux, aux2, cantGasto;
+
         END IF;
         
 		
      ELSE
 		SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='NO TIENES FONDOS SUFICIENTES';
-		SELECT 'NO TIENES SUFICIENTES FONDOS PUTO' AS 'ERROR SALDO';
+
      END IF;      
      
     
@@ -977,6 +972,11 @@ SELECT @cap;
 
 
 
+
+
+
+
+
 /*||||||||||||||||||||||||||||||************* PROCEDIMIENTO INVERSION  ******************|||||||||||||||||||||||||||||||||*/
 
 -- Muestra toda lo que se ha invertido en un determinado tiempo y se muestra por semana, mes o a;o, segun el usuario elija.
@@ -989,8 +989,8 @@ BEGIN
 -- periodo -----> Ingresan un numero entre 1 y 3 para indicar si la consulta es por 1.- semana, 2.- mes o 3.- año .
 -- fechaIncial--> Fecha en la que inicia la consulta no puede ser menor a 2021.ALTER
 -- fechaFinal --> Fecha en la que termina la consulta, no puede ser mayor a la fecha actual.
-	 DECLARE aux, aux2, aux3 INT DEFAULT 0;
-     DECLARE idAlm INT DEFAULT 0;
+	
+    
      DECLARE sql_error TINYINT DEFAULT FALSE;
      
      THIS_PROC: BEGIN
@@ -1011,38 +1011,44 @@ BEGIN
         
 		-- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR SEMANA.
 			
-            SELECT movimientos_financieros.fechaMov as 'Fecha de deposito', week(fechaMov) as Semana, SUM(cantidad) as 'cantidad por semana' 
-			FROM bdnegociomuebles.movimientos_financieros
-			WHERE (movimientos_financieros.codigoTipo=1)
-			AND (movimientos_financieros.fechaMov>=fechaInicial)
-			AND (movimientos_financieros.fechaMov<=fechaFinal)
-			GROUP BY Semana, fechaMov
-			WITH ROLLUP;
-            
+            SELECT  week(fechaMov) as 'Semana', IFNULL(DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T'),'Total') AS 'fecha',
+				SUM(cantidad) as 'cantidad por semana' 
+				FROM bdnegociomuebles.movimientos_financieros
+				WHERE (movimientos_financieros.codigoTipo=1)
+				AND (movimientos_financieros.fechaMov>=fechaInicial)
+				AND (movimientos_financieros.fechaMov<=fechaFinal)
+				GROUP BY Semana, fechaMov
+				WITH ROLLUP;
+				
 		ELSEIF(periodo=2) THEN
         
         -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR MES.
         
-			SELECT movimientos_financieros.fechaMov as 'Fecha de deposito', month(fechaMov) as Mes, SUM(cantidad) as 'cantidad por semana' 
-			FROM bdnegociomuebles.movimientos_financieros
-			WHERE (movimientos_financieros.codigoTipo=1)
-			AND (movimientos_financieros.fechaMov>=fechaInicial)
-			AND (movimientos_financieros.fechaMov<=fechaFinal)
-			GROUP BY Mes, fechaMov
-			WITH ROLLUP;
-        			
+			SET lc_time_names = 'es_ES'; -- Para poner los nombres de los meses en espa;ol
+        
+        
+			SELECT monthname(fechaMov) as Mes, IFNULL(DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T'),'Total') AS 'fecha',
+				SUM(cantidad) as 'cantidad por semana' 
+				FROM bdnegociomuebles.movimientos_financieros
+				WHERE (movimientos_financieros.codigoTipo=1)
+				AND (movimientos_financieros.fechaMov>=fechaInicial)
+				AND (movimientos_financieros.fechaMov<=fechaFinal)
+				GROUP BY Mes, fechaMov
+				WITH ROLLUP;
+						
         ELSEIF(periodo=3) THEN
         
         -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR AÑO.
         
-			SELECT movimientos_financieros.fechaMov as 'Fecha de deposito', year(fechaMov) as Anio, SUM(cantidad) as 'cantidad por semana' 
-			FROM bdnegociomuebles.movimientos_financieros
-			WHERE (movimientos_financieros.codigoTipo=1)
-			AND (movimientos_financieros.fechaMov>=fechaInicial)
-			AND (movimientos_financieros.fechaMov<=fechaFinal)
-			GROUP BY Anio, fechaMov
-			WITH ROLLUP;
-            
+			SELECT year(fechaMov) as Anio, IFNULL(DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T'),'Total') AS 'fecha',
+				SUM(cantidad) as 'cantidad por semana' 
+				FROM bdnegociomuebles.movimientos_financieros
+				WHERE (movimientos_financieros.codigoTipo=1)
+				AND (movimientos_financieros.fechaMov>=fechaInicial)
+				AND (movimientos_financieros.fechaMov<=fechaFinal)
+				GROUP BY Anio, fechaMov
+				WITH ROLLUP;
+				
 		ELSE
         
 			SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT='FECHA DE CONSULTA, INCORRECTA';
@@ -1054,7 +1060,7 @@ BEGIN
 END //
 DELIMITER ;
 
-call inversion(1, '2021/01/01 19:35:05','2021/10/30 19:35:05');
+call inversion(2, '2021/01/01 19:35:05','2021/10/30 19:35:05');
 /*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 /*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
@@ -1142,7 +1148,8 @@ BEGIN
         
         -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR MES.
         
-			
+			SET lc_time_names = 'es_ES'; -- Para poner los nombres de los meses en espa;ol
+
 			with otroGasto as -- CTE que muestra todos los gastos que se le han agragado a cada mueble, ademas de agruparlos.
 			(select  otros_gastos.id, otros_gastos.idMuebles2, movimientos_financieros.cantidad,  sum(cantidad) as gastoTot
 			 from otros_gastos
@@ -1174,7 +1181,7 @@ BEGIN
 				group by ventasview2.idMuebles
 			 )
 				  
-			 SELECT month(FechaVenta) as 'Mes', final.precioDeCompra AS 'CostoDeCompra', final.gastoTotal AS 'GastoExtra', final.CostoTotal, final.PrecioDeVenta,
+			 SELECT monthname(FechaVenta) as 'Mes', final.precioDeCompra AS 'CostoDeCompra', final.gastoTotal AS 'GastoExtra', final.CostoTotal, final.PrecioDeVenta,
 				sum(PrecioDeVenta-CostoTotal)  AS Ganancia  FROM final
 				WHERE (final.FechaVenta>=fechaInicial) AND (final.FechaVenta<=fechaFinal)
 			 group by Mes
@@ -1234,7 +1241,7 @@ BEGIN
 END //
 DELIMITER ;
 
-call ganancia(3, '2021/01/01 19:35:05','2021/11/24 19:35:05');
+call ganancia(2, '2021/01/01 19:35:05','2021/11/24 19:35:05');
 
 
 
@@ -1247,13 +1254,15 @@ call ganancia(3, '2021/01/01 19:35:05','2021/11/24 19:35:05');
 
 -- Muestra todas las compras que se ha hecho en un determinado tiempo y se muestra por semana, mes o a;o, segun el usuario elija.
 
+####### Aqui me quede, ejecutar la esta consulta para ver lo que falta. hay que terminar de quitar los nulos 
+
 DROP PROCEDURE IF EXISTS estadisticaCompras;
 DELIMITER // 
 CREATE PROCEDURE estadisticaCompras(IN periodo INT, fechaInicial DATETIME, fechaFinal DATETIME )
 BEGIN
 
 -- periodo -----> Ingresan un numero entre 1 y 3 para indicar si la consulta es por 1.- semana, 2.- mes o 3.- año .
--- fechaIncial--> Fecha en la que inicia la consulta no puede ser menor a 2021.ALTER
+-- fechaIncial--> Fecha en la que inicia la consulta no puede ser menor a 2021.
 -- fechaFinal --> Fecha en la que termina la consulta, no puede ser mayor a la fecha actual.
 
      DECLARE sql_error TINYINT DEFAULT FALSE;
@@ -1276,14 +1285,16 @@ BEGIN
         
 		-- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR SEMANA.
 			
-			 SELECT muebles.NombreMueble AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeCompra', 
-				movimientos_financieros.cantidad AS 'Costo', week(fechaMov) as Semana
+			 SELECT week(fechaMov) as Semana, ifnull(muebles.NombreMueble, 'TOTAL') AS Muebles, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeCompra', 
+				movimientos_financieros.cantidad AS 'Costo', sum(cantidad) AS 'GatoPorSemana'
 				FROM compras
 				INNER JOIN movimientos_financieros ON movimientos_financieros.id = compras.id 
 				INNER JOIN muebles ON idMuebles2=idMuebles
 				WHERE (movimientos_financieros.fechaMov>=fechaInicial)
 				AND (movimientos_financieros.fechaMov<=fechaFinal)
-				ORDER BY Semana;
+                GROUP BY Semana, muebles.NombreMueble
+                WITH ROLLUP;
+				-- ORDER BY Semana;
 		       
 		ELSEIF(periodo=2) THEN
         
@@ -1291,27 +1302,31 @@ BEGIN
         
 			SET lc_time_names = 'es_ES'; -- Para poner los nombres de los meses en espa;ol
         
-			SELECT muebles.NombreMueble AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeCompra', 
-				movimientos_financieros.cantidad AS 'Costo', monthname(fechaMov) as Mes
+			SELECT monthname(fechaMov) as Mes, ifnull(muebles.NombreMueble, 'TOTAL') AS Muebles, 
+				DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeCompra', sum(cantidad) AS 'GatoPorMes'
 				FROM compras
 				INNER JOIN movimientos_financieros ON movimientos_financieros.id = compras.id 
 				INNER JOIN muebles ON idMuebles2=idMuebles
 				WHERE (movimientos_financieros.fechaMov>=fechaInicial)
 				AND (movimientos_financieros.fechaMov<=fechaFinal)
-				ORDER BY Mes;
+                GROUP BY Mes, muebles.NombreMueble
+                WITH ROLLUP;
+				-- ORDER BY Mes;
         			
         ELSEIF(periodo=3) THEN
         
         -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR AÑO.
         
-			SELECT muebles.NombreMueble AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeCompra', 
-				movimientos_financieros.cantidad AS 'Costo', year(fechaMov) as Anio
+			SELECT year(fechaMov) as Anio, ifnull(muebles.NombreMueble, 'TOTAL') AS Muebles, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeCompra', 
+				movimientos_financieros.cantidad AS 'Costo', sum(cantidad) AS 'GatoPorAnio'
 				FROM compras
 				INNER JOIN movimientos_financieros ON movimientos_financieros.id = compras.id 
 				INNER JOIN muebles ON idMuebles2=idMuebles
 				WHERE (movimientos_financieros.fechaMov>=fechaInicial)
 				AND (movimientos_financieros.fechaMov<=fechaFinal)
-				ORDER BY Anio;
+                GROUP BY Anio, muebles.NombreMueble
+                WITH ROLLUP;
+				-- ORDER BY Anio;
             
 		ELSE
         
@@ -1324,7 +1339,7 @@ BEGIN
 END //
 DELIMITER ;
 
-call estadisticaCompras(1, '2021/01/01 19:35:05','2021/10/30 19:35:05');
+call estadisticaCompras(3, '2021/01/01 19:35:05','2021/10/30 19:35:05');
 /*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 /*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
@@ -1364,42 +1379,46 @@ BEGIN
         
 		-- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR SEMANA.
 			
-			 SELECT muebles.NombreMueble AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeVenta', 
-				movimientos_financieros.cantidad AS 'Precio', week(fechaMov) as Semana
+			 SELECT week(fechaMov) as Semana, ifnull(muebles.NombreMueble, 'TOTAL') AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeVenta', 
+				movimientos_financieros.cantidad AS 'Precio', sum(cantidad) AS 'GananciaPorSemana'
 				FROM ventas
 				INNER JOIN movimientos_financieros ON movimientos_financieros.id = ventas.id 
 				INNER JOIN muebles ON idMuebles2=idMuebles
 				WHERE (movimientos_financieros.fechaMov>=fechaInicial)
 				AND (movimientos_financieros.fechaMov<=fechaFinal)
-				ORDER BY Semana;
-		       
+				GROUP BY Semana, muebles.NombreMueble
+                WITH ROLLUP;
+		                             
+               
 		ELSEIF(periodo=2) THEN
         
         -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR MES.
         
 			SET lc_time_names = 'es_ES'; -- Para poner los nombres de los meses en espa;ol
         
-			 SELECT muebles.NombreMueble AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeVenta', 
-				movimientos_financieros.cantidad AS 'Precio', monthname(fechaMov) as Mes
+		    SELECT monthname(fechaMov) as Mes, ifnull(muebles.NombreMueble, 'TOTAL') AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeVenta', 
+				movimientos_financieros.cantidad AS 'Precio', sum(cantidad) AS 'GananciaPorMes'
 				FROM ventas
 				INNER JOIN movimientos_financieros ON movimientos_financieros.id = ventas.id 
 				INNER JOIN muebles ON idMuebles2=idMuebles
 				WHERE (movimientos_financieros.fechaMov>=fechaInicial)
 				AND (movimientos_financieros.fechaMov<=fechaFinal)
-				ORDER BY Mes;
+				GROUP BY Mes, muebles.NombreMueble
+                WITH ROLLUP;
         			
         ELSEIF(periodo=3) THEN
         
         -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR AÑO.
         
-			SELECT muebles.NombreMueble AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeVenta', 
-				movimientos_financieros.cantidad AS 'Precio', year(fechaMov) as Anio
+			 SELECT year(fechaMov) as Anio, ifnull(muebles.NombreMueble, 'TOTAL') AS Mueble, DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T')  AS 'FechadeVenta', 
+				movimientos_financieros.cantidad AS 'Precio', sum(cantidad) AS 'GananciaPorAnio'
 				FROM ventas
 				INNER JOIN movimientos_financieros ON movimientos_financieros.id = ventas.id 
 				INNER JOIN muebles ON idMuebles2=idMuebles
 				WHERE (movimientos_financieros.fechaMov>=fechaInicial)
 				AND (movimientos_financieros.fechaMov<=fechaFinal)
-				ORDER BY Anio;
+				GROUP BY Anio, muebles.NombreMueble
+                WITH ROLLUP;
             
 		ELSE
         
@@ -1451,14 +1470,15 @@ BEGIN
         
 		-- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR SEMANA.
 			
-			SELECT DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha',
-				movimientos_financieros.cantidad AS 'Cantidad', week(movimientos_financieros.fechaMov) AS 'Semana'
+			SELECT week(movimientos_financieros.fechaMov) AS 'Semana', DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha',
+				SUM(movimientos_financieros.cantidad) AS 'Cantidad'
 				FROM tipo_movimiento
 				INNER JOIN movimientos_financieros ON movimientos_financieros.codigoTipo=tipo_movimiento.codigo
 				WHERE (codigoTipo=2)
                 AND (movimientos_financieros.fechaMov>=fechaInicial)
 				AND (movimientos_financieros.fechaMov<=fechaFinal)
-				ORDER BY Semana ASC;
+                GROUP BY Semana, movimientos_financieros.id
+                WITH ROLLUP;
 		       
 		ELSEIF(periodo=2) THEN
         
@@ -1466,27 +1486,29 @@ BEGIN
         
 			SET lc_time_names = 'es_ES'; -- Para poner los nombres de los meses en espa;ol
         
-			 SELECT DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha',
-				movimientos_financieros.cantidad AS 'Cantidad', monthname(movimientos_financieros.fechaMov) AS 'Mes'
+			 SELECT MONTHNAME(movimientos_financieros.fechaMov) AS 'Mes', DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha',
+				SUM(movimientos_financieros.cantidad) AS 'Cantidad'
 				FROM tipo_movimiento
 				INNER JOIN movimientos_financieros ON movimientos_financieros.codigoTipo=tipo_movimiento.codigo
 				WHERE (codigoTipo=2)
                 AND (movimientos_financieros.fechaMov>=fechaInicial)
 				AND (movimientos_financieros.fechaMov<=fechaFinal)
-				ORDER BY Mes ASC;
+                GROUP BY Mes, movimientos_financieros.id
+                WITH ROLLUP;
         			
         ELSEIF(periodo=3) THEN
         
         -- MUESTRA LA CONSULTA AGRUPANDO RESULTADOS POR AÑO.
         
-			 SELECT DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha',
-				movimientos_financieros.cantidad AS 'Cantidad', year(movimientos_financieros.fechaMov) AS 'Anio'
+			 SELECT YEAR(movimientos_financieros.fechaMov) AS 'Anio', DATE_FORMAT(movimientos_financieros.fechaMov, '%d-%m-%Y %T') AS 'Fecha',
+				SUM(movimientos_financieros.cantidad) AS 'Cantidad'
 				FROM tipo_movimiento
 				INNER JOIN movimientos_financieros ON movimientos_financieros.codigoTipo=tipo_movimiento.codigo
 				WHERE (codigoTipo=2)
                 AND (movimientos_financieros.fechaMov>=fechaInicial)
 				AND (movimientos_financieros.fechaMov<=fechaFinal)
-				ORDER BY Anio ASC;
+                GROUP BY Anio, movimientos_financieros.id
+                WITH ROLLUP;
             
 		ELSE
         
@@ -1499,7 +1521,7 @@ BEGIN
 END //
 DELIMITER ;
 
-call estadisticaRetiros(2, '2021/01/01 19:35:05','2021/10/30 19:35:05');
+call estadisticaRetiros(3, '2021/01/01 19:35:05','2021/10/30 19:35:05');
 /*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 /*|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||*/
 
